@@ -1,0 +1,21 @@
+{
+  "name": "amer-portal",
+  "version": "1.0.0",
+  "description": "A web application to manage compensation requests for an Amer Center.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "amer",
+    "portal",
+    "ticketing"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
