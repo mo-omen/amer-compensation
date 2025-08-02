@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Counter Dashboard - Amer Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        :root {
+            --bg-color: #0D1117;
+            --text-color: #C9D1D9;
+            --text-muted-color: #8B949E;
+            --pane-bg-color: rgba(22, 27, 34, 0.7);
+            --pane-border-color: rgba(48, 54, 61, 0.5);
+        }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: var(--text-color); }
+        .glass-pane { background-color: var(--pane-bg-color); backdrop-filter: blur(12px); border: 1px solid var(--pane-border-color); }
+        .details-panel, .return-form { max-height: 0; overflow: hidden; transition: all 0.5s ease-in-out; }
+        .request-card.open .details-panel { max-height: 600px; }
+        .return-form.open { max-height: 300px; margin-top: 1rem; padding: 1rem; }
+        .request-card.open .chevron-icon { transform: rotate(180deg); }
+        .chevron-icon { transition: transform 0.3s ease-in-out; }
+        .btn-gradient { background-image: linear-gradient(to right, #3B82F6, #8B5CF6); transition: all 0.3s ease; }
+        .btn-gradient:hover { box-shadow: 0 0 20px rgba(99, 102, 241, 0.5); }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div id="dashboard-container" class="hidden">
+        <nav class="glass-pane fixed w-full z-30 top-0">
+            <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <h1 class="text-2xl font-bold text-white">Counter Portal</h1>
+                    <div class="flex items-center space-x-4">
+                        <span id="welcome-message" class="text-gray-400 text-sm"></span>
+                        <button id="logout-button" class="px-4 py-2 text-sm font-medium text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-colors">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <main id="dashboard-content" class="pt-24 max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+            <!-- Counter content will be injected here -->
+        </main>
+    </div>
+
+    <script src="/js/auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkAuth(['counter', 'admin']);
+            if (!user) return;
+
+            // Redirect if a counter user lands here without a counter number
+            if (user.role === 'counter' && !user.counterNumber) {
+                alert("Please select a counter number to continue.");
+                logout(user); // Force logout to re-trigger the selection
+                return;
+            }
+
+            document.getElementById('dashboard-container').classList.remove('hidden');
+            const welcomeText = user.role === 'counter' ? `Welcome, <span class="font-semibold text-white">${user.username} (Counter ${user.counterNumber})</span>` : `Welcome, <span class="font-semibold text-white">${user.username}</span>`;
+            document.getElementById('welcome-message').innerHTML = welcomeText;
+            document.getElementById('logout-button').addEventListener('click', () => logout(user));
+
+            let allUsers = [];
+            let allRequests = [];
+
+            const fetchData = async () => {
+                try {
+                    const response = await fetch('/api/data');
+                    const data = await response.json();
+                    allUsers = data.users;
+                    allRequests = data.requests;
+                    renderDashboard();
+                } catch (error) {
+                    console.error("Failed to fetch data:", error);
+                }
+            };
+
+            const renderDashboard = () => {
+                const myRequests = allRequests.filter(r => r.counterId === user.id);
+                const myRequestsHtml = myRequests.length > 0 ? myRequests.map(req => {
+                    const eventHistoryHtml = req.events.map(e => `
+                        <li class="py-1">
+                            <div class="flex items-center space-x-3">
+                                <div class="bg-gray-700 rounded-full h-2 w-2"></div>
+                                <span class="text-xs text-gray-400">${new Date(e.timestamp).toLocaleString()}: <strong>${e.action}</strong> by ${e.user}</span>
+                            </div>
+                            ${e.note ? `<p class="text-xs text-amber-400/80 italic mt-1 pl-5 border-l-2 border-amber-500/30">Note: ${e.note}</p>` : ''}
+                        </li>
+                    `).join('');
+                    
+                    const returnedActionsHtml = req.status === 'Returned' ? `
+                        <button data-action="compensate" data-id="${req.id}" class="px-3 py-2 rounded-lg text-sm font-semibold bg-green-600/80 text-white hover:bg-green-600">Mark Compensated</button>
+                        <button data-action="show-return-form" data-id="${req.id}" class="px-3 py-2 rounded-lg text-sm font-semibold bg-orange-600/80 text-white hover:bg-orange-600">Return to Reception</button>
+                    ` : '';
+
+                    return `
+                    <div class="request-card-wrapper">
+                        <div class="request-card glass-pane rounded-xl overflow-hidden">
+                            <div data-action="toggle-details" class="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-800/50 transition-colors">
+                                <div>
+                                    <p class="font-bold text-lg text-white">${req.ticketNumber}</p>
+                                    <p class="text-sm ${req.status === 'Returned' ? 'text-orange-400 font-semibold' : 'text-gray-400'}">${req.status}</p>
+                                </div>
+                                <div class="chevron-icon text-gray-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                            </div>
+                            <div class="details-panel bg-black/20">
+                                <div class="p-4 space-y-4">
+                                    <div>
+                                        <h4 class="font-semibold text-sm text-white mb-2">History</h4>
+                                        <ul class="space-y-2 border-l border-gray-700 pl-4">${eventHistoryHtml}</ul>
+                                    </div>
+                                    <div class="pt-4 border-t border-gray-700/50 text-right flex gap-2 justify-end">
+                                        ${returnedActionsHtml}
+                                        <button data-action="delete" data-id="${req.id}" class="px-3 py-2 rounded-lg text-sm font-semibold bg-red-800/80 text-white hover:bg-red-700">Delete</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="return-form-${req.id}" class="return-form glass-pane rounded-xl border-t border-orange-500/50">
+                            <h4 class="font-semibold text-sm text-white mb-2">Return with Note</h4>
+                            <textarea id="return-note-${req.id}" placeholder="Optional: Explain why you are returning this." class="w-full text-sm p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"></textarea>
+                            <div class="text-right mt-2"><button data-action="return-to-reception" data-id="${req.id}" class="px-4 py-2 text-sm font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-500">Submit Return</button></div>
+                        </div>
+                    </div>
+                `}).join('') : `<div class="glass-pane p-8 rounded-xl text-center text-gray-500">You have no active requests.</div>`;
+
+                const receptionOptions = allUsers
+                    .filter(u => u.role === 'reception' && u.isOnline)
+                    .map(r => `<option value="${r.id}">${r.username} (Online)</option>`)
+                    .join('');
+
+                document.getElementById('dashboard-content').innerHTML = `
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-1 glass-pane p-6 rounded-xl h-fit">
+                            <h2 class="text-2xl font-bold text-white mb-4">New Request</h2>
+                            <form id="counter-request-form" class="space-y-4">
+                                <input name="ticketNumber" required placeholder="Ticket Number" class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <select name="receptionId" required class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">Tag Reception User</option>
+                                    ${receptionOptions || '<option disabled>No reception users online</option>'}
+                                </select>
+                                <textarea name="description" placeholder="Optional Description" class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                                <button type="submit" class="w-full p-3 rounded-lg text-white font-semibold btn-gradient">Submit Request</button>
+                            </form>
+                        </div>
+                        <div class="lg:col-span-2 glass-pane p-6 rounded-xl">
+                            <h2 class="text-2xl font-bold text-white mb-4">My Sent Requests</h2>
+                            <div id="my-requests-list" class="space-y-4">${myRequestsHtml}</div>
+                        </div>
+                    </div>
+                `;
+            };
+
+            await fetchData();
+            setInterval(fetchData, 5000);
+
+            document.getElementById('dashboard-content').addEventListener('submit', async e => {
+                if (e.target.id === 'counter-request-form') {
+                    e.preventDefault();
+                    const form = e.target;
+                    const formData = new FormData(form);
+                    const requestData = {
+                        ticketNumber: formData.get('ticketNumber'),
+                        receptionId: formData.get('receptionId'),
+                        description: formData.get('description'),
+                        counterId: user.id,
+                        counterName: user.username,
+                        counterNumber: user.counterNumber, // Add counter number
+                        status: 'Pending'
+                    };
+                    
+                    if (!requestData.receptionId) {
+                        alert("Please select an online reception user.");
+                        return;
+                    }
+
+                    await fetch('/api/requests', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ requestData, user })
+                    });
+                    
+                    form.reset();
+                    fetchData();
+                }
+            });
+
+            document.getElementById('dashboard-content').addEventListener('click', async e => {
+                const target = e.target.closest('[data-action]');
+                if (!target) return;
+
+                const action = target.dataset.action;
+                const id = target.dataset.id;
+                
+                if (action === "toggle-details") {
+                    target.closest('.request-card').classList.toggle('open');
+                } else if (action === 'show-return-form') {
+                    document.getElementById(`return-form-${id}`).classList.toggle('open');
+                } else if (action === 'return-to-reception') {
+                    const note = document.getElementById(`return-note-${id}`).value;
+                    await fetch(`/api/requests/${id}/status`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'Pending', user, note })
+                    });
+                    fetchData();
+                } else if (action === 'compensate' || action === 'delete') {
+                    const finalStatus = action === 'compensate' ? 'Compensated' : 'Deleted';
+                    if (confirm(`Are you sure you want to mark this as ${finalStatus}? This action is final.`)) {
+                        await fetch(`/api/requests/${id}`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user, finalStatus })
+                        });
+                        fetchData();
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

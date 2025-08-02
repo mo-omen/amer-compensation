@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reception Dashboard - Amer Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        :root {
+            --bg-color: #0D1117;
+            --text-color: #C9D1D9;
+            --text-muted-color: #8B949E;
+            --pane-bg-color: rgba(22, 27, 34, 0.7);
+            --pane-border-color: rgba(48, 54, 61, 0.5);
+        }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: var(--text-color); }
+        .glass-pane { background-color: var(--pane-bg-color); backdrop-filter: blur(12px); border: 1px solid var(--pane-border-color); }
+        .details-panel { max-height: 0; overflow: hidden; transition: all 0.5s ease-in-out; }
+        .request-card.open .details-panel { max-height: 600px; }
+        .request-card.open .chevron-icon { transform: rotate(180deg); }
+        .chevron-icon { transition: transform 0.3s ease-in-out; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .status-pending { background-color: #3B82F6; }
+        .status-returned { background-color: #F97316; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div id="dashboard-container" class="hidden">
+        <nav class="glass-pane fixed w-full z-30 top-0">
+            <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <h1 class="text-2xl font-bold text-white">Reception Portal</h1>
+                    <div class="flex items-center space-x-4">
+                        <span id="welcome-message" class="text-gray-400 text-sm"></span>
+                        <button id="logout-button" class="px-4 py-2 text-sm font-medium text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-colors">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <main id="dashboard-content" class="pt-24 max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+             <!-- Content will be injected here -->
+        </main>
+    </div>
+
+    <script src="/js/auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkAuth(['reception', 'admin']);
+            if (!user) return;
+
+            document.getElementById('dashboard-container').classList.remove('hidden');
+            document.getElementById('welcome-message').innerHTML = `Welcome, <span class="font-semibold text-white">${user.username}</span>`;
+            document.getElementById('logout-button').addEventListener('click', () => logout(user));
+
+            let allUsers = [];
+            let allRequests = [];
+            let currentSort = { by: 'createdAt', order: 'desc' };
+
+            const fetchData = async () => {
+                try {
+                    const response = await fetch('/api/data');
+                    const data = await response.json();
+                    allUsers = data.users;
+                    allRequests = data.requests;
+                    renderDashboard(getFormState());
+                } catch (error) {
+                    console.error("Failed to fetch data:", error);
+                }
+            };
+            
+            const getFormState = () => {
+                const form = document.getElementById('reception-controls');
+                return form ? Object.fromEntries(new FormData(form).entries()) : { myRequests: 'on' };
+            };
+
+            const renderDashboard = (filters = {}) => {
+                const counterOptions = allUsers.filter(u => u.role === 'counter').map(u => `<option value="${u.id}" ${filters.counterId === u.id ? 'selected' : ''}>${u.username}</option>`).join('');
+                
+                let filteredRequests = [...allRequests];
+                if (filters.myRequests === 'on') filteredRequests = filteredRequests.filter(r => r.receptionId === user.id);
+                if (filters.status) filteredRequests = filteredRequests.filter(r => r.status === filters.status);
+                if (filters.counterId) filteredRequests = filteredRequests.filter(r => r.counterId === filters.counterId);
+
+                filteredRequests.sort((a, b) => {
+                    if (currentSort.by === 'ticketNumber') {
+                        return currentSort.order === 'asc' ? a.ticketNumber.localeCompare(b.ticketNumber, undefined, {numeric: true}) : b.ticketNumber.localeCompare(a.ticketNumber, undefined, {numeric: true});
+                    }
+                    return currentSort.order === 'asc' ? new Date(a.createdAt) - new Date(b.createdAt) : new Date(b.createdAt) - new Date(a.createdAt);
+                });
+
+                const requestsHtml = filteredRequests.length > 0 ? filteredRequests.map(req => {
+                    const isReturned = req.status === 'Returned';
+                    const actionButtonHtml = isReturned 
+                        ? `<button data-action="cancel-return" data-id="${req.id}" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-600/80 text-white hover:bg-gray-500 transition">Cancel Return</button>`
+                        : `<button data-action="return" data-id="${req.id}" class="px-4 py-2 rounded-lg text-sm font-semibold bg-orange-600/80 text-white hover:bg-orange-600 transition">Return to Counter</button>`;
+
+                    const eventHistoryHtml = req.events.map(e => `
+                        <li class="py-1">
+                            <div class="flex items-center space-x-3">
+                                <div class="bg-gray-700 rounded-full h-2 w-2"></div>
+                                <span class="text-xs text-gray-400">${new Date(e.timestamp).toLocaleString()}: <strong>${e.action}</strong> by ${e.user}</span>
+                            </div>
+                            ${e.note ? `<p class="text-xs text-amber-400/80 italic mt-1 pl-5 border-l-2 border-amber-500/30">Note: ${e.note}</p>` : ''}
+                        </li>
+                    `).join('');
+
+                    // Display counter name with counter number
+                    const fromCounterText = `${req.counterName} ${req.counterNumber ? `(C${req.counterNumber})` : ''}`;
+
+                    return `
+                    <div class="request-card glass-pane rounded-xl overflow-hidden">
+                        <div data-action="toggle-details" class="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-800/50 transition-colors">
+                            <div class="flex items-center space-x-4">
+                                <div class="status-dot ${isReturned ? 'status-returned' : 'status-pending'}"></div>
+                                <span class="font-bold text-lg text-white">${req.ticketNumber}</span>
+                                <span class="text-gray-400 text-sm">from ${fromCounterText}</span>
+                            </div>
+                            <div class="flex items-center space-x-6">
+                                <span class="text-sm text-gray-400">${new Date(req.createdAt).toLocaleString()}</span>
+                                <div class="chevron-icon text-gray-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                            </div>
+                        </div>
+                        <div class="details-panel bg-black/20">
+                            <div class="p-4 space-y-4">
+                                ${req.description ? `<p class="text-gray-300 p-4 bg-gray-900/50 rounded-md"><strong>Description:</strong> ${req.description}</p>` : ''}
+                                <div>
+                                    <h4 class="font-semibold text-sm text-white mb-2">History</h4>
+                                    <ul class="space-y-2 border-l border-gray-700 pl-4">${eventHistoryHtml}</ul>
+                                </div>
+                                <div class="pt-4 border-t border-gray-700/50 text-right">${actionButtonHtml}</div>
+                            </div>
+                        </div>
+                    </div>
+                `}).join('') : `<div class="glass-pane rounded-xl p-8 text-center text-gray-500">No requests match the current filters.</div>`;
+
+                document.getElementById('dashboard-content').innerHTML = `
+                    <div class="glass-pane p-6 rounded-xl mb-8">
+                        <h2 class="text-3xl font-bold text-white mb-4">Compensation Requests</h2>
+                        <form id="reception-controls" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <select name="status" class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="">All Statuses</option><option value="Pending">Pending</option><option value="Returned">Returned</option></select>
+                                <select name="counterId" class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="">All Counters</option>${counterOptions}</select>
+                                <div class="flex items-center justify-center"><input type="checkbox" id="my-requests-filter" name="myRequests" class="h-4 w-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800" checked><label for="my-requests-filter" class="ml-2 block text-sm text-gray-400">Only My Tags</label></div>
+                            </div>
+                            <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-gray-700/50">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-medium text-gray-400">Sort by:</span>
+                                    <select id="sort-by-select" class="p-2 text-sm bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="createdAt">Date Created</option><option value="ticketNumber">Ticket Number</option></select>
+                                    <button type="button" id="sort-order-btn" class="p-2 bg-gray-900/50 border border-gray-700 rounded-lg">↓ Desc</button>
+                                </div>
+                                <button type="button" id="clear-filters-btn" class="p-2 bg-gray-600/80 text-white rounded-lg hover:bg-gray-600 font-semibold text-sm px-4">Clear Filters</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div id="requests-list" class="space-y-4">${requestsHtml}</div>
+                `;
+            };
+            
+            await fetchData();
+            setInterval(fetchData, 5000);
+
+            document.getElementById('dashboard-content').addEventListener('click', async e => {
+                const target = e.target.closest('[data-action]');
+                if (!target) return;
+
+                const action = target.dataset.action;
+                
+                if (action === 'toggle-details') {
+                    target.closest('.request-card').classList.toggle('open');
+                    return;
+                }
+                
+                if (action === 'return' || action === 'cancel-return') {
+                    const id = target.dataset.id;
+                    const newStatus = action === 'return' ? 'Returned' : 'Pending';
+                    await fetch(`/api/requests/${id}/status`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: newStatus, user })
+                    });
+                    fetchData();
+                }
+            });
+            
+            document.getElementById('dashboard-content').addEventListener('change', e => {
+                if (e.target.closest('#reception-controls')) {
+                    renderDashboard(getFormState());
+                }
+            });
+
+            document.getElementById('dashboard-content').addEventListener('click', e => {
+                if (e.target.id === 'clear-filters-btn') {
+                    currentSort = { by: 'createdAt', order: 'desc' };
+                    document.getElementById('reception-controls').reset();
+                    renderDashboard({});
+                } else if (e.target.id === 'sort-order-btn') {
+                    currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+                    e.target.textContent = currentSort.order === 'asc' ? '↑ Asc' : '↓ Desc';
+                    renderDashboard(getFormState());
+                }
+            });
+             document.getElementById('dashboard-content').addEventListener('change', e => {
+                if (e.target.id === 'sort-by-select') {
+                    currentSort.by = e.target.value;
+                    renderDashboard(getFormState());
+                }
+            });
+        });
+    </script>
+</body>
+</html>
