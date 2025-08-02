@@ -39,7 +39,27 @@
             </div>
         </nav>
         <main id="dashboard-content" class="pt-24 max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-             <!-- Content will be injected here -->
+            <div class="glass-pane p-6 rounded-xl mb-8">
+                <h2 class="text-3xl font-bold text-white mb-4">Compensation Requests</h2>
+                <form id="reception-controls" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <select name="status" class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="">All Statuses</option><option value="Pending">Pending</option><option value="Returned">Returned</option></select>
+                        <select name="counterId" class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><!-- Options populated by JS --></select>
+                        <div class="flex items-center justify-center"><input type="checkbox" id="my-requests-filter" name="myRequests" class="h-4 w-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800" checked><label for="my-requests-filter" class="ml-2 block text-sm text-gray-400">Only My Tags</label></div>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-gray-700/50">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-gray-400">Sort by:</span>
+                            <select id="sort-by-select" class="p-2 text-sm bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="createdAt">Date Created</option><option value="ticketNumber">Ticket Number</option></select>
+                            <button type="button" id="sort-order-btn" class="p-2 bg-gray-900/50 border border-gray-700 rounded-lg">↓ Desc</button>
+                        </div>
+                        <button type="button" id="clear-filters-btn" class="p-2 bg-gray-600/80 text-white rounded-lg hover:bg-gray-600 font-semibold text-sm px-4">Clear Filters</button>
+                    </div>
+                </form>
+            </div>
+            <div id="requests-list" class="space-y-4">
+                <!-- Request list will be injected here -->
+            </div>
         </main>
     </div>
 
@@ -57,39 +77,36 @@
             let allRequests = [];
             let currentSort = { by: 'createdAt', order: 'desc' };
 
-            const fetchData = async () => {
-                try {
-                    const response = await fetch('/api/data');
-                    const data = await response.json();
-                    allUsers = data.users;
-                    allRequests = data.requests;
-                    renderDashboard(getFormState());
-                } catch (error) {
-                    console.error("Failed to fetch data:", error);
-                }
-            };
-            
             const getFormState = () => {
                 const form = document.getElementById('reception-controls');
-                return form ? Object.fromEntries(new FormData(form).entries()) : { myRequests: 'on' };
+                const formData = new FormData(form);
+                const filters = Object.fromEntries(formData.entries());
+                filters.sortBy = document.getElementById('sort-by-select').value;
+                return filters;
             };
 
-            const renderDashboard = (filters = {}) => {
-                const counterOptions = allUsers.filter(u => u.role === 'counter').map(u => `<option value="${u.id}" ${filters.counterId === u.id ? 'selected' : ''}>${u.username}</option>`).join('');
-                
+            const renderRequestList = () => {
+                const filters = getFormState();
                 let filteredRequests = [...allRequests];
+
                 if (filters.myRequests === 'on') filteredRequests = filteredRequests.filter(r => r.receptionId === user.id);
                 if (filters.status) filteredRequests = filteredRequests.filter(r => r.status === filters.status);
                 if (filters.counterId) filteredRequests = filteredRequests.filter(r => r.counterId === filters.counterId);
 
                 filteredRequests.sort((a, b) => {
-                    if (currentSort.by === 'ticketNumber') {
+                    if (filters.sortBy === 'ticketNumber') {
                         return currentSort.order === 'asc' ? a.ticketNumber.localeCompare(b.ticketNumber, undefined, {numeric: true}) : b.ticketNumber.localeCompare(a.ticketNumber, undefined, {numeric: true});
                     }
                     return currentSort.order === 'asc' ? new Date(a.createdAt) - new Date(b.createdAt) : new Date(b.createdAt) - new Date(a.createdAt);
                 });
 
-                const requestsHtml = filteredRequests.length > 0 ? filteredRequests.map(req => {
+                const listContainer = document.getElementById('requests-list');
+                if (filteredRequests.length === 0) {
+                    listContainer.innerHTML = `<div class="glass-pane rounded-xl p-8 text-center text-gray-500">No requests match the current filters.</div>`;
+                    return;
+                }
+
+                listContainer.innerHTML = filteredRequests.map(req => {
                     const isReturned = req.status === 'Returned';
                     const actionButtonHtml = isReturned 
                         ? `<button data-action="cancel-return" data-id="${req.id}" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-600/80 text-white hover:bg-gray-500 transition">Cancel Return</button>`
@@ -105,7 +122,6 @@
                         </li>
                     `).join('');
 
-                    // Display counter name with counter number
                     const fromCounterText = `${req.counterName} ${req.counterNumber ? `(C${req.counterNumber})` : ''}`;
 
                     return `
@@ -124,37 +140,33 @@
                         <div class="details-panel bg-black/20">
                             <div class="p-4 space-y-4">
                                 ${req.description ? `<p class="text-gray-300 p-4 bg-gray-900/50 rounded-md"><strong>Description:</strong> ${req.description}</p>` : ''}
-                                <div>
-                                    <h4 class="font-semibold text-sm text-white mb-2">History</h4>
-                                    <ul class="space-y-2 border-l border-gray-700 pl-4">${eventHistoryHtml}</ul>
-                                </div>
+                                <div><h4 class="font-semibold text-sm text-white mb-2">History</h4><ul class="space-y-2 border-l border-gray-700 pl-4">${eventHistoryHtml}</ul></div>
                                 <div class="pt-4 border-t border-gray-700/50 text-right">${actionButtonHtml}</div>
                             </div>
                         </div>
                     </div>
-                `}).join('') : `<div class="glass-pane rounded-xl p-8 text-center text-gray-500">No requests match the current filters.</div>`;
+                `}).join('');
+            };
 
-                document.getElementById('dashboard-content').innerHTML = `
-                    <div class="glass-pane p-6 rounded-xl mb-8">
-                        <h2 class="text-3xl font-bold text-white mb-4">Compensation Requests</h2>
-                        <form id="reception-controls" class="space-y-4">
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <select name="status" class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="">All Statuses</option><option value="Pending">Pending</option><option value="Returned">Returned</option></select>
-                                <select name="counterId" class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="">All Counters</option>${counterOptions}</select>
-                                <div class="flex items-center justify-center"><input type="checkbox" id="my-requests-filter" name="myRequests" class="h-4 w-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800" checked><label for="my-requests-filter" class="ml-2 block text-sm text-gray-400">Only My Tags</label></div>
-                            </div>
-                            <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-gray-700/50">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-sm font-medium text-gray-400">Sort by:</span>
-                                    <select id="sort-by-select" class="p-2 text-sm bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="createdAt">Date Created</option><option value="ticketNumber">Ticket Number</option></select>
-                                    <button type="button" id="sort-order-btn" class="p-2 bg-gray-900/50 border border-gray-700 rounded-lg">↓ Desc</button>
-                                </div>
-                                <button type="button" id="clear-filters-btn" class="p-2 bg-gray-600/80 text-white rounded-lg hover:bg-gray-600 font-semibold text-sm px-4">Clear Filters</button>
-                            </div>
-                        </form>
-                    </div>
-                    <div id="requests-list" class="space-y-4">${requestsHtml}</div>
-                `;
+            const fetchData = async () => {
+                try {
+                    const response = await fetch('/api/data');
+                    const data = await response.json();
+                    allUsers = data.users;
+                    allRequests = data.requests;
+                    
+                    const counterSelect = document.querySelector('select[name="counterId"]');
+                    const currentCounterId = counterSelect.value;
+                    counterSelect.innerHTML = '<option value="">All Counters</option>';
+                    allUsers.filter(u => u.role === 'counter').forEach(c => {
+                        counterSelect.innerHTML += `<option value="${c.id}">${c.username}</option>`;
+                    });
+                    counterSelect.value = currentCounterId; // Preserve selection
+
+                    renderRequestList();
+                } catch (error) {
+                    console.error("Failed to fetch data:", error);
+                }
             };
             
             await fetchData();
@@ -163,14 +175,11 @@
             document.getElementById('dashboard-content').addEventListener('click', async e => {
                 const target = e.target.closest('[data-action]');
                 if (!target) return;
-
                 const action = target.dataset.action;
-                
                 if (action === 'toggle-details') {
                     target.closest('.request-card').classList.toggle('open');
                     return;
                 }
-                
                 if (action === 'return' || action === 'cancel-return') {
                     const id = target.dataset.id;
                     const newStatus = action === 'return' ? 'Returned' : 'Pending';
@@ -183,28 +192,20 @@
                 }
             });
             
-            document.getElementById('dashboard-content').addEventListener('change', e => {
-                if (e.target.closest('#reception-controls')) {
-                    renderDashboard(getFormState());
-                }
+            document.getElementById('reception-controls').addEventListener('change', () => renderRequestList());
+
+            document.getElementById('sort-order-btn').addEventListener('click', (e) => {
+                currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+                e.target.textContent = currentSort.order === 'asc' ? '↑ Asc' : '↓ Desc';
+                renderRequestList();
             });
 
-            document.getElementById('dashboard-content').addEventListener('click', e => {
-                if (e.target.id === 'clear-filters-btn') {
-                    currentSort = { by: 'createdAt', order: 'desc' };
-                    document.getElementById('reception-controls').reset();
-                    renderDashboard({});
-                } else if (e.target.id === 'sort-order-btn') {
-                    currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
-                    e.target.textContent = currentSort.order === 'asc' ? '↑ Asc' : '↓ Desc';
-                    renderDashboard(getFormState());
-                }
-            });
-             document.getElementById('dashboard-content').addEventListener('change', e => {
-                if (e.target.id === 'sort-by-select') {
-                    currentSort.by = e.target.value;
-                    renderDashboard(getFormState());
-                }
+            document.getElementById('clear-filters-btn').addEventListener('click', () => {
+                document.getElementById('reception-controls').reset();
+                document.getElementById('sort-by-select').value = 'createdAt';
+                document.getElementById('sort-order-btn').textContent = '↓ Desc';
+                currentSort = { by: 'createdAt', order: 'desc' };
+                renderRequestList();
             });
         });
     </script>
