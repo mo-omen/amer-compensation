@@ -10,12 +10,42 @@
         :root {
             --bg-color: #0D1117;
             --text-color: #C9D1D9;
+            --text-main-color: #FFFFFF;
             --text-muted-color: #8B949E;
             --pane-bg-color: rgba(22, 27, 34, 0.7);
             --pane-border-color: rgba(48, 54, 61, 0.5);
+            --input-bg-color: rgba(13, 17, 23, 0.5);
+            --card-hover-bg: rgba(139, 148, 158, 0.1);
         }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: var(--text-color); }
-        .glass-pane { background-color: var(--pane-bg-color); backdrop-filter: blur(12px); border: 1px solid var(--pane-border-color); }
+        body.light-theme {
+            --bg-color: #F3F4F6;
+            --text-color: #1F2937;
+            --text-main-color: #000000;
+            --text-muted-color: #6B7280;
+            --pane-bg-color: rgba(255, 255, 255, 0.7);
+            --pane-border-color: rgba(209, 213, 219, 0.7);
+            --input-bg-color: #F9FAFB;
+            --card-hover-bg: #F9FAFB;
+        }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-color);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .text-main { color: var(--text-color); }
+        .text-main-strong { color: var(--text-main-color); }
+        .text-muted { color: var(--text-muted-color); }
+        .glass-pane { 
+            background-color: var(--pane-bg-color); 
+            backdrop-filter: blur(12px); 
+            border: 1px solid var(--pane-border-color);
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .input-field {
+            background-color: var(--input-bg-color);
+            border-color: var(--pane-border-color);
+        }
         .details-panel { max-height: 0; overflow: hidden; transition: all 0.5s ease-in-out; }
         .request-card.open .details-panel { max-height: 600px; }
         .request-card.open .chevron-icon { transform: rotate(180deg); }
@@ -23,6 +53,7 @@
         .status-dot { width: 10px; height: 10px; border-radius: 50%; }
         .status-pending { background-color: #3B82F6; }
         .status-returned { background-color: #F97316; }
+        .card-hover:hover { background-color: var(--card-hover-bg); }
     </style>
 </head>
 <body class="min-h-screen">
@@ -30,9 +61,13 @@
         <nav class="glass-pane fixed w-full z-30 top-0">
             <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center justify-between h-16">
-                    <h1 class="text-2xl font-bold text-white">Reception Portal</h1>
+                    <h1 class="text-2xl font-bold text-main-strong">Reception Portal</h1>
                     <div class="flex items-center space-x-4">
-                        <span id="welcome-message" class="text-gray-400 text-sm"></span>
+                        <span id="welcome-message" class="text-muted text-sm"></span>
+                        <button id="theme-switcher" class="p-2 rounded-full hover:bg-gray-500/20 transition-colors">
+                            <svg id="theme-icon-sun" class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                            <svg id="theme-icon-moon" class="w-5 h-5 text-gray-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                        </button>
                         <button id="logout-button" class="px-4 py-2 text-sm font-medium text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-colors">Logout</button>
                     </div>
                 </div>
@@ -40,18 +75,18 @@
         </nav>
         <main id="dashboard-content" class="pt-24 max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
             <div class="glass-pane p-6 rounded-xl mb-8">
-                <h2 class="text-3xl font-bold text-white mb-4">Compensation Requests</h2>
+                <h2 class="text-3xl font-bold text-main-strong mb-4">Compensation Requests</h2>
                 <form id="reception-controls" class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <select name="status" class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="">All Statuses</option><option value="Pending">Pending</option><option value="Returned">Returned</option></select>
-                        <select name="counterId" class="w-full p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><!-- Options populated by JS --></select>
-                        <div class="flex items-center justify-center"><input type="checkbox" id="my-requests-filter" name="myRequests" class="h-4 w-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800" checked><label for="my-requests-filter" class="ml-2 block text-sm text-gray-400">Only My Tags</label></div>
+                        <select name="status" class="w-full p-2 input-field border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-main"><option value="">All Statuses</option><option value="Pending">Pending</option><option value="Returned">Returned</option></select>
+                        <select name="counterId" class="w-full p-2 input-field border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-main"><!-- Options populated by JS --></select>
+                        <div class="flex items-center justify-center"><input type="checkbox" id="my-requests-filter" name="myRequests" class="h-4 w-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800" checked><label for="my-requests-filter" class="ml-2 block text-sm text-muted">Only My Tags</label></div>
                     </div>
-                    <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-gray-700/50">
+                    <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t" style="border-color: var(--pane-border-color);">
                         <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium text-gray-400">Sort by:</span>
-                            <select id="sort-by-select" class="p-2 text-sm bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"><option value="createdAt">Date Created</option><option value="ticketNumber">Ticket Number</option></select>
-                            <button type="button" id="sort-order-btn" class="p-2 bg-gray-900/50 border border-gray-700 rounded-lg">↓ Desc</button>
+                            <span class="text-sm font-medium text-muted">Sort by:</span>
+                            <select id="sort-by-select" class="p-2 text-sm input-field border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-main"><option value="createdAt">Date Created</option><option value="ticketNumber">Ticket Number</option></select>
+                            <button type="button" id="sort-order-btn" class="p-2 input-field border rounded-lg text-main">↓ Desc</button>
                         </div>
                         <button type="button" id="clear-filters-btn" class="p-2 bg-gray-600/80 text-white rounded-lg hover:bg-gray-600 font-semibold text-sm px-4">Clear Filters</button>
                     </div>
@@ -69,8 +104,35 @@
             const user = await checkAuth(['reception', 'admin']);
             if (!user) return;
 
+            // --- Theme Switcher Logic ---
+            const themeSwitcher = document.getElementById('theme-switcher');
+            const sunIcon = document.getElementById('theme-icon-sun');
+            const moonIcon = document.getElementById('theme-icon-moon');
+
+            function applyTheme(theme) {
+                if (theme === 'light') {
+                    document.body.classList.add('light-theme');
+                    sunIcon.classList.add('hidden');
+                    moonIcon.classList.remove('hidden');
+                } else {
+                    document.body.classList.remove('light-theme');
+                    sunIcon.classList.remove('hidden');
+                    moonIcon.classList.add('hidden');
+                }
+                localStorage.setItem('theme', theme);
+            }
+
+            themeSwitcher.addEventListener('click', () => {
+                const currentTheme = localStorage.getItem('theme') || 'dark';
+                applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+            });
+
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            applyTheme(savedTheme);
+
+            // --- Main Application Logic ---
             document.getElementById('dashboard-container').classList.remove('hidden');
-            document.getElementById('welcome-message').innerHTML = `Welcome, <span class="font-semibold text-white">${user.username}</span>`;
+            document.getElementById('welcome-message').innerHTML = `Welcome, <span class="font-semibold text-main-strong">${user.username}</span>`;
             document.getElementById('logout-button').addEventListener('click', () => logout(user));
 
             let allUsers = [];
@@ -102,7 +164,7 @@
 
                 const listContainer = document.getElementById('requests-list');
                 if (filteredRequests.length === 0) {
-                    listContainer.innerHTML = `<div class="glass-pane rounded-xl p-8 text-center text-gray-500">No requests match the current filters.</div>`;
+                    listContainer.innerHTML = `<div class="glass-pane rounded-xl p-8 text-center text-muted">No requests match the current filters.</div>`;
                     return;
                 }
 
@@ -116,32 +178,33 @@
                         <li class="py-1">
                             <div class="flex items-center space-x-3">
                                 <div class="bg-gray-700 rounded-full h-2 w-2"></div>
-                                <span class="text-xs text-gray-400">${new Date(e.timestamp).toLocaleString()}: <strong>${e.action}</strong> by ${e.user}</span>
+                                <span class="text-xs text-muted">${new Date(e.timestamp).toLocaleString()}: <strong class="text-main">${e.action}</strong> by ${e.user}</span>
                             </div>
                             ${e.note ? `<p class="text-xs text-amber-400/80 italic mt-1 pl-5 border-l-2 border-amber-500/30">Note: ${e.note}</p>` : ''}
                         </li>
                     `).join('');
 
                     const fromCounterText = `${req.counterName} ${req.counterNumber ? `(C${req.counterNumber})` : ''}`;
+                    const isOpen = document.querySelector(`.request-card[data-id="${req.id}"]`)?.classList.contains('open');
 
                     return `
-                    <div class="request-card glass-pane rounded-xl overflow-hidden">
-                        <div data-action="toggle-details" class="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-800/50 transition-colors">
+                    <div class="request-card glass-pane rounded-xl overflow-hidden ${isOpen ? 'open' : ''}" data-id="${req.id}">
+                        <div data-action="toggle-details" class="p-4 flex justify-between items-center cursor-pointer card-hover transition-colors">
                             <div class="flex items-center space-x-4">
                                 <div class="status-dot ${isReturned ? 'status-returned' : 'status-pending'}"></div>
-                                <span class="font-bold text-lg text-white">${req.ticketNumber}</span>
-                                <span class="text-gray-400 text-sm">from ${fromCounterText}</span>
+                                <span class="font-bold text-lg text-main-strong">${req.ticketNumber}</span>
+                                <span class="text-muted text-sm">from ${fromCounterText}</span>
                             </div>
                             <div class="flex items-center space-x-6">
-                                <span class="text-sm text-gray-400">${new Date(req.createdAt).toLocaleString()}</span>
-                                <div class="chevron-icon text-gray-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
+                                <span class="text-sm text-muted">${new Date(req.createdAt).toLocaleString()}</span>
+                                <div class="chevron-icon text-muted"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>
                             </div>
                         </div>
                         <div class="details-panel bg-black/20">
                             <div class="p-4 space-y-4">
-                                ${req.description ? `<p class="text-gray-300 p-4 bg-gray-900/50 rounded-md"><strong>Description:</strong> ${req.description}</p>` : ''}
-                                <div><h4 class="font-semibold text-sm text-white mb-2">History</h4><ul class="space-y-2 border-l border-gray-700 pl-4">${eventHistoryHtml}</ul></div>
-                                <div class="pt-4 border-t border-gray-700/50 text-right">${actionButtonHtml}</div>
+                                ${req.description ? `<p class="text-main p-4 bg-gray-900/50 rounded-md"><strong>Description:</strong> ${req.description}</p>` : ''}
+                                <div><h4 class="font-semibold text-sm text-main-strong mb-2">History</h4><ul class="space-y-2 border-l pl-4" style="border-color: var(--pane-border-color);">${eventHistoryHtml}</ul></div>
+                                <div class="pt-4" style="border-top: 1px solid var(--pane-border-color);"><div class="text-right">${actionButtonHtml}</div></div>
                             </div>
                         </div>
                     </div>
@@ -161,7 +224,7 @@
                     allUsers.filter(u => u.role === 'counter').forEach(c => {
                         counterSelect.innerHTML += `<option value="${c.id}">${c.username}</option>`;
                     });
-                    counterSelect.value = currentCounterId; // Preserve selection
+                    counterSelect.value = currentCounterId;
 
                     renderRequestList();
                 } catch (error) {
@@ -172,7 +235,7 @@
             await fetchData();
             setInterval(fetchData, 5000);
 
-            document.getElementById('dashboard-content').addEventListener('click', async e => {
+            document.getElementById('requests-list').addEventListener('click', async e => {
                 const target = e.target.closest('[data-action]');
                 if (!target) return;
                 const action = target.dataset.action;
