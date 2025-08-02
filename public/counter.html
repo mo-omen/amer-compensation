@@ -161,6 +161,13 @@
                 const myRequests = allRequests.filter(r => r.counterId === user.id);
                 const listContainer = document.getElementById('my-requests-list');
                 
+                // **FIX**: Preserve the open state of details panels and return forms
+                const openRequests = new Set();
+                const openReturnForms = new Set();
+                listContainer.querySelectorAll('.request-card.open').forEach(card => openRequests.add(card.dataset.id));
+                listContainer.querySelectorAll('.return-form.open').forEach(form => openReturnForms.add(form.id.replace('return-form-', '')));
+
+
                 if (myRequests.length === 0) {
                     listContainer.innerHTML = `<div class="p-8 text-center text-muted">You have no active requests.</div>`;
                     return;
@@ -182,9 +189,12 @@
                         <button data-action="show-return-form" data-id="${req.id}" class="px-3 py-2 rounded-lg text-sm font-semibold bg-orange-600/80 text-white hover:bg-orange-600">Return to Reception</button>
                     ` : '';
 
+                    const isOpen = openRequests.has(req.id);
+                    const isReturnFormOpen = openReturnForms.has(req.id);
+
                     return `
                     <div class="request-card-wrapper">
-                        <div class="request-card glass-pane rounded-xl overflow-hidden">
+                        <div class="request-card glass-pane rounded-xl overflow-hidden ${isOpen ? 'open' : ''}" data-id="${req.id}">
                             <div data-action="toggle-details" class="p-4 flex justify-between items-center cursor-pointer card-hover transition-colors">
                                 <div>
                                     <p class="font-bold text-lg text-main-strong">${req.ticketNumber}</p>
@@ -205,7 +215,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="return-form-${req.id}" class="return-form glass-pane border-t" style="border-color: var(--pane-border-color);">
+                        <div id="return-form-${req.id}" class="return-form glass-pane border-t ${isReturnFormOpen ? 'open' : ''}" style="border-color: var(--pane-border-color);">
                             <h4 class="font-semibold text-sm text-main-strong mb-2">Return with Note</h4>
                             <textarea id="return-note-${req.id}" placeholder="Optional: Explain why you are returning this." class="w-full text-sm p-2 input-field border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-main"></textarea>
                             <div class="text-right mt-2"><button data-action="return-to-reception" data-id="${req.id}" class="px-4 py-2 text-sm font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-500">Submit Return</button></div>
